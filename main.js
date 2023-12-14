@@ -1,11 +1,15 @@
+//joinaa servulle komennolla -johtaja / @johtaja
+// Jos tupakka / kalja 0 niin kaatuu koska ei ole statseja
 const Discord = require('discord.js')
+const { MessageAttachment } = require('discord.js')
+const path = require('path')
 require('dotenv').config()
 const client = new Discord.Client()
 const fs = require('fs')
 
 const userDataFile = 'user_data.json'
 const channelId = '490133651275644939'
-
+const quotesChannelId = '372001432603328512'
 client.once('ready', () => {
   console.log('Ministeri paikalla')
 })
@@ -19,6 +23,8 @@ client.on('message', async message => {
   const prefixKalja = '-kalja'
   const prefixRooki = '-rööki'
   const prefixLervaus = '-lervaus'
+  const prefixApu = '-apu'
+  const prefixKuva = '-kuva'
 
   if (message.content.startsWith(prefixPelaan)) {
     handlePelaanCommand(message)
@@ -32,6 +38,10 @@ client.on('message', async message => {
     handleRöökiCommand(message)
   } else if (message.content.startsWith(prefixLervaus)) {
     handleLervausCommand(message)
+  } else if (message.content.startsWith(prefixApu)) {
+    handleCommands(message)
+  } else if (message.content.startsWith(prefixKuva)) {
+    handleKuvaCommand(message)
   }
 })
 
@@ -78,7 +88,7 @@ async function handlePelaanCommand (message) {
 function handleJäähyäCommand (message) {
   // Extract the mentioned user
   const mentionedMember = message.mentions.members.first()
-  const timeoutDuration = 10000 // 10 seconds
+  const timeoutDuration = 60000 // 10 seconds
 
   // Check if the author has the required role (adjust 'YOUR_REQUIRED_ROLE_ID' accordingly)
   const requiredRoleId = '282646242897559562'
@@ -97,7 +107,7 @@ function handleJäähyäCommand (message) {
 
       // Notify the mentioned user about the mute
       message.channel.send(
-        `<@${mentionedMember.id}>, saat 10 sekunttia jäähyä ja olet nyt mykistetty!`
+        `<@${mentionedMember.id}>, saat 60 sekunttia jäähyä ja olet nyt mykistetty!`
       )
     } else {
       message.channel.send(
@@ -110,20 +120,12 @@ function handleJäähyäCommand (message) {
 }
 
 function handleProfiiliCommand (message) {
+  const userId = message.author.id
+
   // Extract the mentioned user
   const mentionedMember = message.mentions.members.first()
 
-  // Get the member (user) from the message
-  const member = message.guild.members.cache.get(message.author.id)
-
-  // Load user data for the command invoker
-  const userData = loadUserData(member.user.id)
-
   // Create the profile embed with beers and tobaccos details for the command invoker
-  const profileEmbed = createProfileEmbed(member, userData)
-
-  // Send the profile embed to the channel for the command invoker
-  message.channel.send(profileEmbed)
 
   if (mentionedMember) {
     // Load user data for the mentioned user
@@ -144,21 +146,32 @@ function handleProfiiliCommand (message) {
   }
 }
 
-function createProfileEmbed (member) {
-  const profileEmbed = new Discord.MessageEmbed()
-    .setColor('#0099ff')
-    .setTitle(`${member.user.tag}'s Profile`)
-    .addField('Username', member.user.username, true)
-    .addField('Discriminator', member.user.discriminator, true)
-    .addField('User ID', member.user.id, true)
-    .addField('Joined Server', member.joinedAt.toDateString(), true)
-    .addField('Joined Discord', member.user.createdAt.toDateString(), true)
-    .addField('Beers Consumed', userData.beers || 0, true)
-    .addField('Tobaccos Smoked', userData.tobaccos || 0, true)
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setTimestamp()
+function createProfileEmbed (member, userData) {
+  // Check if the member's user ID exists in userData
+  if (userData[member.user.id]) {
+    const userStats = userData[member.user.id]
+    let status = ' '
+    if (userStats.tobaccos > 5) {
+      status = 'Röökiboss'
+    } else if (userStats.beers > 5) {
+      status = 'Keittokapteeni'
+    }
+    const profileEmbed = new Discord.MessageEmbed()
+      .setColor('#0099ff')
+      .setTitle(`${member.user.tag}'s Profile`)
+      .addField('Username', member.user.username, true)
+      .addField('Beers Consumed 🍺', userStats.beers || 0, true)
+      .addField('Tobaccos Smoked 🚬', userStats.tobaccos || 0, true)
+      .addField('Status: ', status)
+      .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+      .setTimestamp()
 
-  return profileEmbed
+    return profileEmbed
+  } else {
+    // Handle the case where the user ID is not found in userData
+    console.error(`User data not found for user ID: ${member.user.id}`)
+    return null // or handle it as you see fit
+  }
 }
 
 function handleKaljaCommand (message) {
@@ -224,6 +237,74 @@ function handleLervausCommand (message) {
   }
 }
 
+function handleCommands (message) {
+  if (message.content.toLowerCase() === '-apu') {
+    message.channel.send(
+      `Komennot:\n-apu\n-pelaan (pelin nimi)\n-rööki\n-kalja\n-lervaus\n-profiili (@username)`
+    )
+  }
+}
+
+// Function to send a photo to a channel
+async function sendPhotoToChannel (channel, photoFileName) {
+  const imagePath = path.join(__dirname, 'img', photoFileName)
+  const attachment = new MessageAttachment(imagePath)
+
+  // Fetch messages from the quotes channel
+  const quotesChannel = await client.channels.fetch(quotesChannelId)
+  const messages = await quotesChannel.messages.fetch()
+
+  // Filter out non-text messages
+  const textMessages = messages.filter(msg => msg.content.trim() !== '')
+
+  // Select a random message
+  const randomQuote = textMessages.random().content
+  channel.send(attachment)
+  channel.send(randomQuote)
+}
+
+async function sendRandomPhotoWithMessage (
+  channel,
+  photoFileName,
+  quotesChannelId
+) {
+  const imagePath = path.join(__dirname, 'img', photoFileName)
+  const attachment = new MessageAttachment(imagePath)
+
+  // Fetch messages from the quotes channel
+  const quotesChannel = await client.channels.fetch(quotesChannelId)
+  const messages = await quotesChannel.messages.fetch()
+
+  // Filter out non-text messages
+  const textMessages = messages.filter(msg => msg.content.trim() !== '')
+
+  // Select a random message
+  const randomQuote = textMessages.random().content
+
+  // Send the photo and the selected quote
+  channel.send(attachment)
+  channel.send(`moro\n${randomQuote}`)
+}
+
+function getRandomPhotoFileName () {
+  const imgPath = path.join(__dirname, 'img')
+  const files = fs.readdirSync(imgPath)
+
+  // Filter out non-image files (you can customize this based on your file types)
+  const imageFiles = files.filter(
+    file => file.endsWith('.jpg') || file.endsWith('.png')
+  )
+
+  // Get a random image file
+  const randomIndex = Math.floor(Math.random() * imageFiles.length)
+  return imageFiles[randomIndex]
+}
+
+function handleKuvaCommand (message) {
+  const photoFileName = getRandomPhotoFileName()
+  sendPhotoToChannel(message.channel, photoFileName)
+}
+
 function loadUserData () {
   try {
     const data = fs.readFileSync(userDataFile)
@@ -244,25 +325,5 @@ function saveUserData (userData) {
 }
 
 // Example of how to use the handleKaljaCommand function
-const kaljaMessageMock = {
-  content: '-kalja',
-  author: { id: '123456789012345678' },
-  channel: { send: content => console.log(content) } // Replace with your actual send function
-}
-
-const röökiMessageMock = {
-  content: '-rööki',
-  author: { id: '123456789012345678' },
-  channel: { send: content => console.log(content) }
-}
-const lervausMessageMock = {
-  content: '-lervaus',
-  author: { id: '123456789012345678' },
-  channel: { send: content => console.log(content) }
-}
-
-handleKaljaCommand(kaljaMessageMock)
-handleRöökiCommand(röökiMessageMock)
-handleLervausCommand(lervausMessageMock)
 
 client.login(process.env.BOT_TOKEN)
