@@ -1,5 +1,6 @@
 //joinaa servulle komennolla -johtaja / @johtaja
 // Jos tupakka / kalja 0 niin kaatuu koska ei ole statseja
+// joinvoice ei toimi, Puuttuu se client login
 const Discord = require('discord.js')
 const { MessageAttachment } = require('discord.js')
 const path = require('path')
@@ -10,6 +11,7 @@ const fs = require('fs')
 const userDataFile = 'user_data.json'
 const channelId = '490133651275644939'
 const quotesChannelId = '372001432603328512'
+
 client.once('ready', () => {
   console.log('Ministeri paikalla')
 })
@@ -25,6 +27,7 @@ client.on('message', async message => {
   const prefixLervaus = '-lervaus'
   const prefixApu = '-apu'
   const prefixKuva = '-kuva'
+  const prefixVoice = '-johtaja'
 
   if (message.content.startsWith(prefixPelaan)) {
     handlePelaanCommand(message)
@@ -42,6 +45,8 @@ client.on('message', async message => {
     handleCommands(message)
   } else if (message.content.startsWith(prefixKuva)) {
     handleKuvaCommand(message)
+  } else if (message.content.startsWith(prefixVoice)) {
+    await joinVoiceChannel(message)
   }
 })
 
@@ -303,6 +308,24 @@ function getRandomPhotoFileName () {
 function handleKuvaCommand (message) {
   const photoFileName = getRandomPhotoFileName()
   sendPhotoToChannel(message.channel, photoFileName)
+}
+
+async function joinVoiceChannel (message) {
+  // Check if the user is in a voice channel
+  const memberVoiceChannel = message.member.voice.channel
+  if (!memberVoiceChannel) {
+    message.reply('You need to be in a voice channel to use this command.')
+    return
+  }
+
+  // Join the user's voice channel
+  try {
+    const connection = await memberVoiceChannel.join()
+    message.reply(`Joined ${memberVoiceChannel.name} successfully!`)
+  } catch (error) {
+    console.error('Error joining voice channel:', error)
+    message.reply('Error joining the voice channel.')
+  }
 }
 
 function loadUserData () {
